@@ -1,0 +1,37 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Packages/
+# A library doesn't pin its dependencies; apps that use it do.
+Package.resolved
+.netrc
+
+# Xcode
+xcuserdata/
+DerivedData/
+build/
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM
+*.dSYM.zip
+timeline.xctimeline
+playground.xcworkspace
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~
+
+# Local Claude Code settings
+.claude/settings.local.json
