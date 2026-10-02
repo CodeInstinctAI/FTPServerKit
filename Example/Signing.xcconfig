@@ -1,0 +1,15 @@
+// Signing settings for the example app.
+//
+// To run on a device, create Signing.local.xcconfig next to this file
+// (it's ignored by git) and set your own team and a bundle ID you own:
+//
+//     DEVELOPMENT_TEAM = ABCDE12345
+//     PRODUCT_BUNDLE_IDENTIFIER = com.yourcompany.FTPServerKitExample
+//
+// Set signing there rather than in Xcode's Signing & Capabilities tab,
+// which writes the team into the project file.
+
+DEVELOPMENT_TEAM =
+PRODUCT_BUNDLE_IDENTIFIER = com.example.FTPServerKitExample
+
+#include? "Signing.local.xcconfig"

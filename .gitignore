@@ -35,3 +35,6 @@ playground.xcworkspace
 
 # Local Claude Code settings
 .claude/settings.local.json
+
+# Local signing settings for the example app
+Signing.local.xcconfig
