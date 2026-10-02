@@ -26,7 +26,7 @@ struct ConnectionView: View {
                         activeServersSection
                     }
 
-                    // Commands and responses from the server delegate
+                    // Commands and responses from the server's event stream
                     if !serverManager.recentActivity.isEmpty {
                         activityCard
                     }

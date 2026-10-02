@@ -153,7 +153,7 @@ final class FTPSession: @unchecked Sendable {
 
         let loggedArgument = command == "PASS" ? "****" : argument
         log(.debug, "> \(command) \(loggedArgument)")
-        server?.notifyDelegate { $0.ftpServer($1, didReceiveCommand: command, argument: loggedArgument) }
+        server?.emit(.receivedCommand(command, argument: loggedArgument, connectionID: id))
 
         guard isAuthenticated || Self.commandsAllowedBeforeLogin.contains(command) else {
             reply(530, "Not logged in")
@@ -646,7 +646,7 @@ final class FTPSession: @unchecked Sendable {
         try? transfer.file?.close()
         release(transfer)
         log(.error, "Transfer failed: \(error)")
-        server?.notifyDelegate { $0.ftpServer($1, didFailWithError: error) }
+        server?.emit(.failed(error, connectionID: id))
         reply(426, "Connection closed; transfer aborted")
     }
 
@@ -688,10 +688,10 @@ final class FTPSession: @unchecked Sendable {
             guard let self else { return }
             if let error {
                 self.log(.error, "Failed to send response: \(error)")
-                self.server?.notifyDelegate { $0.ftpServer($1, didFailWithError: error) }
+                self.server?.emit(.failed(error, connectionID: self.id))
             } else {
                 self.log(.debug, "< \(trimmed)")
-                self.server?.notifyDelegate { $0.ftpServer($1, didSendResponse: trimmed) }
+                self.server?.emit(.sentResponse(trimmed, connectionID: self.id))
             }
             completion?()
         })

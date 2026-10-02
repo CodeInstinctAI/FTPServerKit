@@ -32,8 +32,8 @@ public enum FTPServerError: Error, LocalizedError {
 /// Serves the files of an ``FTPFileProvider``. Supports USER, PASS, PWD, CWD, CDUP, TYPE, MODE, STRU,
 /// PASV, EPSV, LIST, NLST, RETR, SIZE, MDTM, REST, ABOR, SYST, FEAT, OPTS, NOOP and QUIT.
 public final class FTPServer: @unchecked Sendable {
-    // Unchecked: the mutable state below is only touched on `queue`, except `storedDelegate`,
-    // which `delegateLock` guards.
+    // Unchecked: the mutable state below is only touched on `queue`, except `storedDelegate` and
+    // `eventContinuations`, which `observersLock` guards.
 
     public let configuration: FTPServerConfiguration
 
@@ -53,8 +53,9 @@ public final class FTPServer: @unchecked Sendable {
     /// Read by sessions on `queue`; use ``fileProvider`` from outside.
     private(set) var currentFileProvider: any FTPFileProvider
 
-    private let delegateLock = NSLock()
+    private let observersLock = NSLock()
     private weak var storedDelegate: (any FTPServerDelegate)?
+    private var eventContinuations: [UUID: AsyncStream<FTPServerEvent>.Continuation] = [:]
 
     // MARK: - Initialization
 
@@ -67,6 +68,7 @@ public final class FTPServer: @unchecked Sendable {
     deinit {
         let listener = listener
         let sessions = Array(sessions.values)
+        eventContinuations.values.forEach { $0.finish() }
         queue.async {
             listener?.cancel()
             sessions.forEach { $0.close() }
@@ -78,15 +80,40 @@ public final class FTPServer: @unchecked Sendable {
     /// Receives server events on the main actor. Held weakly.
     public var delegate: (any FTPServerDelegate)? {
         get {
-            delegateLock.lock()
-            defer { delegateLock.unlock() }
+            observersLock.lock()
+            defer { observersLock.unlock() }
             return storedDelegate
         }
         set {
-            delegateLock.lock()
-            defer { delegateLock.unlock() }
+            observersLock.lock()
+            defer { observersLock.unlock() }
             storedDelegate = newValue
         }
+    }
+
+    /// A new stream of the server's events, in order, from the moment you read this property.
+    ///
+    /// Every read returns a separate stream, so several observers can follow the server at once,
+    /// alongside the ``delegate``. The stream lasts across restarts and finishes when the server
+    /// is deallocated; cancel the iterating task to stop listening earlier.
+    ///
+    /// ```swift
+    /// .task {
+    ///     for await event in server.events {
+    ///         if case .receivedCommand(let command, let argument) = event { … }
+    ///     }
+    /// }
+    /// ```
+    public var events: AsyncStream<FTPServerEvent> {
+        let (stream, continuation) = AsyncStream.makeStream(of: FTPServerEvent.self)
+        let id = UUID()
+        continuation.onTermination = { [weak self] _ in
+            self?.removeEventContinuation(id)
+        }
+        observersLock.lock()
+        defer { observersLock.unlock() }
+        eventContinuations[id] = continuation
+        return stream
     }
 
     /// The files the server serves. Can be replaced while the server runs; the next command uses the new provider.
@@ -162,7 +189,7 @@ public final class FTPServer: @unchecked Sendable {
             completeStart(with: .failure(FTPServerError.stoppedBeforeReady))
             log(.info, "Server stopped")
             if wasRunning {
-                notifyDelegate { $0.ftpServerDidStop($1, error: nil) }
+                emit(.stopped(error: nil))
             }
         }
     }
@@ -180,7 +207,7 @@ public final class FTPServer: @unchecked Sendable {
             state = .running
             log(.info, "Server listening on port \(port)")
             completeStart(with: .success(port))
-            notifyDelegate { $0.ftpServer($1, didStartOnPort: port) }
+            emit(.started(port: port))
 
         case .waiting(let error):
             log(.warning, "Listener waiting: \(error)")
@@ -191,7 +218,7 @@ public final class FTPServer: @unchecked Sendable {
             tearDown()
             completeStart(with: .failure(FTPServerError.listenerFailed(error)))
             if wasRunning {
-                notifyDelegate { $0.ftpServerDidStop($1, error: error) }
+                emit(.stopped(error: error))
             }
 
         default:
@@ -245,13 +272,26 @@ public final class FTPServer: @unchecked Sendable {
         configuration.logHandler?(entry)
     }
 
-    func notifyDelegate(_ event: @escaping @MainActor @Sendable (any FTPServerDelegate, FTPServer) -> Void) {
+    /// Sends `event` to every ``events`` stream, and to the delegate on the main actor.
+    func emit(_ event: FTPServerEvent) {
+        observersLock.lock()
+        let delegate = storedDelegate
+        let continuations = Array(eventContinuations.values)
+        observersLock.unlock()
+
+        continuations.forEach { $0.yield(event) }
         guard let delegate else { return }
         DispatchQueue.main.async {
             MainActor.assumeIsolated {
-                event(delegate, self)
+                event.deliver(to: delegate, from: self)
             }
         }
+    }
+
+    private func removeEventContinuation(_ id: UUID) {
+        observersLock.lock()
+        defer { observersLock.unlock() }
+        eventContinuations[id] = nil
     }
 
     /// Runs `work` on `queue`, also when already on it.

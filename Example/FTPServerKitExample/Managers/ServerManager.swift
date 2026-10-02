@@ -45,7 +45,13 @@ final class ServerManager: ObservableObject {
             ),
             fileProvider: FTPDirectoryProvider(rootURL: sharedDirectory)
         )
-        server.delegate = self
+
+        // The stream finishes when the server is released along with this manager
+        Task { [weak self, events = server.events] in
+            for await event in events {
+                self?.handle(event)
+            }
+        }
 
         loadSharedFiles()
     }
@@ -143,21 +149,22 @@ final class ServerManager: ObservableObject {
     }
 }
 
-// MARK: - FTPServerDelegate
+// MARK: - Server Events
 
-extension ServerManager: FTPServerDelegate {
-    func ftpServerDidStop(_ server: FTPServer, error: (any Error)?) {
-        activeServers.removeAll()
-        if let error {
-            errorMessage = "FTP server stopped: \(error.localizedDescription)"
+private extension ServerManager {
+    func handle(_ event: FTPServerEvent) {
+        switch event {
+        case .stopped(let error):
+            activeServers.removeAll()
+            if let error {
+                errorMessage = "FTP server stopped: \(error.localizedDescription)"
+            }
+        case .receivedCommand(let command, let argument, _):
+            appendActivity("→ \(command) \(argument)")
+        case .sentResponse(let response, _):
+            appendActivity("← \(response)")
+        case .started, .failed:
+            break
         }
-    }
-
-    func ftpServer(_ server: FTPServer, didReceiveCommand command: String, argument: String) {
-        appendActivity("→ \(command) \(argument)")
-    }
-
-    func ftpServer(_ server: FTPServer, didSendResponse response: String) {
-        appendActivity("← \(response)")
     }
 }

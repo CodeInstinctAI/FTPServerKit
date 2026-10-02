@@ -54,6 +54,59 @@ struct FTPServerTests {
         await #expect(throws: FTPServerError.self) { try await second.start() }
         #expect(!second.isRunning)
     }
+
+    @Test func eventStreamsAndTheDelegateReceiveStartAndStop() async throws {
+        let files = try TemporaryFiles()
+        let server = makeServer(provider: FTPDirectoryProvider(rootURL: files.root))
+        let first = server.events
+        let second = server.events
+        let delegate = RecordingDelegate()
+        server.delegate = delegate
+
+        let port = try await server.start()
+        server.stop()
+
+        for stream in [first, second] {
+            var iterator = stream.makeAsyncIterator()
+            guard case .started(let startedPort) = await iterator.next() else {
+                Issue.record("Expected .started")
+                return
+            }
+            #expect(startedPort == port)
+            guard case .stopped(let error) = await iterator.next() else {
+                Issue.record("Expected .stopped")
+                return
+            }
+            #expect(error == nil)
+        }
+
+        // Delegate calls are queued on the main actor; this hop runs after them.
+        await MainActor.run {}
+        #expect(await delegate.events == ["started \(port)", "stopped"])
+    }
+
+    @Test func eventStreamFinishesWhenTheServerIsReleased() async throws {
+        let files = try TemporaryFiles()
+        var server: FTPServer? = makeServer(provider: FTPDirectoryProvider(rootURL: files.root))
+        let events = try #require(server?.events)
+        server = nil
+
+        var iterator = events.makeAsyncIterator()
+        #expect(await iterator.next() == nil)
+    }
+}
+
+@MainActor
+private final class RecordingDelegate: FTPServerDelegate {
+    var events: [String] = []
+
+    func ftpServer(_ server: FTPServer, didStartOnPort port: UInt16) {
+        events.append("started \(port)")
+    }
+
+    func ftpServerDidStop(_ server: FTPServer, error: (any Error)?) {
+        events.append(error == nil ? "stopped" : "failed")
+    }
 }
 
 #if os(macOS)
@@ -93,6 +146,39 @@ struct FTPTransferTests {
         #expect(listing.contains("drwxr-xr-x"))
         #expect(!listing.contains(".hidden"))
         #expect(try curl(["--list-only", "\(base)/sub/"]).output == "b.txt\n")
+    }
+
+    @Test func eventStreamReportsCommandsAndResponses() async throws {
+        let files = try TemporaryFiles()
+        let server = makeServer(provider: FTPDirectoryProvider(rootURL: files.root))
+        let events = server.events
+        let port = try await server.start()
+        #expect(try curl(["ftp://user:pass@127.0.0.1:\(port)/a.txt"]).output == "hello")
+        server.stop()
+
+        var commands: [String] = []
+        var responses: [String] = []
+        var connectionIDs: Set<UUID> = []
+        events: for await event in events {
+            switch event {
+            case .receivedCommand(let command, let argument, let connectionID):
+                commands.append("\(command) \(argument)")
+                connectionIDs.insert(connectionID)
+            case .sentResponse(let response, let connectionID):
+                responses.append(response)
+                connectionIDs.insert(connectionID)
+            case .stopped:
+                break events
+            default:
+                break
+            }
+        }
+
+        #expect(commands.contains("USER user"))
+        #expect(commands.contains("PASS ****"))
+        #expect(commands.contains("RETR a.txt"))
+        #expect(responses.contains { $0.hasPrefix("226 ") })
+        #expect(connectionIDs.count == 1) // curl used one control connection
     }
 
     @Test func rejectsBadLoginsAndMissingFiles() async throws {

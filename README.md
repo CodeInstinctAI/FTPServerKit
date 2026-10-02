@@ -11,7 +11,7 @@ Use it to share files from your app with any FTP client on the local network: Fi
 - Files are streamed in chunks, so large files aren't loaded into memory
 - Username and password or anonymous login
 - `async` start that reports errors such as a port already in use
-- Server events on the main actor through a delegate, plus a log handler
+- Server events as an `AsyncStream`, or through a delegate for existing code, plus a log handler
 - Opt-in workarounds for older and embedded FTP clients
 - Swift 6 language mode, safe to use from any thread
 
@@ -106,7 +106,36 @@ Only turn these on for clients that need them. With `transferCompletionDelay` ab
 
 ### Events
 
-Set a delegate to follow what the server does. All methods are optional and called on the main actor:
+Iterate `events` to follow what the server does. Each read returns a new stream, so several parts of your app can listen at once. A stream only gets events from the moment you create it, lasts across restarts, and finishes when the server is released:
+
+```swift
+struct ActivityView: View {
+    let server: FTPServer
+    @State private var lastCommand = ""
+
+    var body: some View {
+        Text(lastCommand)
+            .task { // cancelled when the view disappears
+                for await event in server.events {
+                    switch event {
+                    case .receivedCommand(let command, let argument, _):
+                        lastCommand = "\(command) \(argument)" // PASS arguments are masked
+                    case .stopped(let error?):
+                        print("Server stopped: \(error)")
+                    default:
+                        break
+                    }
+                }
+            }
+    }
+}
+```
+
+The events are `.started(port:)`, `.stopped(error:)`, `.receivedCommand(_:argument:connectionID:)`, `.sentResponse(_:connectionID:)` and `.failed(_:connectionID:)`. The `connectionID` is the same as in log entries, so you can tell clients apart when several are connected.
+
+#### Delegate
+
+For existing code, a delegate gets the same events. All methods are optional and called on the main actor. You can use a delegate and streams together:
 
 ```swift
 @MainActor
