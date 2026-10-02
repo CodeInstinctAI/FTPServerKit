@@ -103,7 +103,7 @@ public final class FTPServer: @unchecked Sendable {
     /// ```swift
     /// .task {
     ///     for await event in server.events {
-    ///         if case .receivedCommand(let command, let argument) = event { … }
+    ///         if case .receivedCommand(let command, let argument, _) = event { … }
     ///     }
     /// }
     /// ```
