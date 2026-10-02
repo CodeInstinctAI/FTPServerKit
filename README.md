@@ -175,3 +175,7 @@ swift test
 ```
 
 The transfer tests run real downloads through `/usr/bin/curl` and only run on macOS.
+
+## License
+
+FTPServerKit is available under the MIT license. See [LICENSE](LICENSE) for details.
