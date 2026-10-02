@@ -12,8 +12,11 @@ import os
 
 /// Errors from starting an ``FTPServer``.
 public enum FTPServerError: Error, LocalizedError {
+    /// ``FTPServer/start()`` was called while the server was starting or running.
     case alreadyStarted
+    /// ``FTPServer/stop()`` was called before the server was ready for clients.
     case stoppedBeforeReady
+    /// The server couldn't listen on the port, for example because it's in use.
     case listenerFailed(any Error)
 
     public var errorDescription: String? {
@@ -36,6 +39,7 @@ public final class FTPServer: @unchecked Sendable {
     // Unchecked: the mutable state below is only touched on `queue`, except `storedDelegate` and
     // `eventContinuations`, which `observersLock` guards. `eventSubject` is only sent to on `queue`.
 
+    /// The options the server was created with.
     public let configuration: FTPServerConfiguration
 
     let queue = DispatchQueue(label: "FTPServerKit.FTPServer")
@@ -61,6 +65,10 @@ public final class FTPServer: @unchecked Sendable {
 
     // MARK: - Initialization
 
+    /// Creates a server. It doesn't listen until you call ``start()``.
+    /// - Parameters:
+    ///   - configuration: The port, authentication and other options.
+    ///   - fileProvider: The files to serve, for example an ``FTPDirectoryProvider``.
     public init(configuration: FTPServerConfiguration, fileProvider: any FTPFileProvider) {
         self.configuration = configuration
         self.currentFileProvider = fileProvider

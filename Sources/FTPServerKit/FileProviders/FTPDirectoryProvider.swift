@@ -12,10 +12,12 @@ import Foundation
 /// Clients can't reach anything outside `rootURL`, also not through symbolic links.
 public struct FTPDirectoryProvider: FTPFileProvider {
 
+    /// The directory clients see as `/`, with symbolic links resolved.
     public let rootURL: URL
     /// Whether files and directories whose name starts with `.` are listed and served.
     public var includesHiddenFiles: Bool
 
+    /// Creates a provider that serves `rootURL` and everything below it.
     public init(rootURL: URL, includesHiddenFiles: Bool = false) {
         self.rootURL = rootURL.standardizedFileURL.resolvingSymlinksInPath()
         self.includesHiddenFiles = includesHiddenFiles

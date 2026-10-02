@@ -33,8 +33,16 @@ public extension FTPServerDelegate {
 /// One log line from an ``FTPServer``, passed to ``FTPServerConfiguration/logHandler``.
 public struct FTPLogEntry: Sendable, CustomStringConvertible {
 
+    /// How important a log line is. Levels compare, so you can filter with `entry.level >= .info`.
     public enum Level: Int, Sendable, Comparable, CustomStringConvertible {
-        case debug, info, warning, error
+        /// Every command and reply, and data connection details, for tracing one client's session.
+        case debug
+        /// Connections, transfers, and the server starting and stopping.
+        case info
+        /// Something the server recovered from, such as a refused connection, a timeout or a missing file.
+        case warning
+        /// The server or a transfer failed.
+        case error
 
         public static func < (lhs: Level, rhs: Level) -> Bool {
             lhs.rawValue < rhs.rawValue
@@ -50,13 +58,17 @@ public struct FTPLogEntry: Sendable, CustomStringConvertible {
         }
     }
 
+    /// When the line was logged.
     public let date: Date
+    /// How important the line is.
     public let level: Level
     /// The client connection the line belongs to, or `nil` for server-wide lines.
     /// Group by it to rebuild one client's session, for example to attach to a crash report.
     public let connectionID: UUID?
+    /// The text of the line.
     public let message: String
 
+    /// The line as `[date] [level] [connection] message`, with the first 8 characters of the connection ID.
     public var description: String {
         let connection = connectionID.map { " [\($0.uuidString.prefix(8))]" } ?? ""
         return "[\(date.formatted(.iso8601))] [\(level)]\(connection) \(message)"

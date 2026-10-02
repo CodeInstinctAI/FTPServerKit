@@ -44,6 +44,7 @@ public struct FTPServerConfiguration: Sendable {
     /// Lines are also written to the unified log (subsystem `FTPServerKit`).
     public var logHandler: (@Sendable (FTPLogEntry) -> Void)?
 
+    /// Creates a configuration. Only `authentication` is required.
     public init(
         port: UInt16 = 2121,
         authentication: Authentication,
@@ -81,6 +82,7 @@ public struct FTPLegacyClientOptions: Sendable, Equatable {
     /// same port for REST + RETR without sending PASV again.
     public var keepsPassiveListenerOpen: Bool
 
+    /// Creates options with the given workarounds; both are off by default.
     public init(transferCompletionDelay: TimeInterval = 0, keepsPassiveListenerOpen: Bool = false) {
         self.transferCompletionDelay = transferCompletionDelay
         self.keepsPassiveListenerOpen = keepsPassiveListenerOpen

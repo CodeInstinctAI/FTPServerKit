@@ -8,14 +8,14 @@
 import Foundation
 
 /// Serves one file, listed alone in the root directory. Read-only.
-///
-/// Replaces Core's `FTPServer.setBundleFile(_:)`.
 public struct FTPSingleFileProvider: FTPFileProvider {
 
+    /// The file on disk.
     public let fileURL: URL
     /// The name clients see, `fileURL.lastPathComponent` unless set.
     public let fileName: String
 
+    /// Creates a provider that serves `fileURL`, under `fileName` if you pass one.
     public init(fileURL: URL, fileName: String? = nil) {
         self.fileURL = fileURL
         self.fileName = fileName ?? fileURL.lastPathComponent

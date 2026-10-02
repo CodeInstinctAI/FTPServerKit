@@ -35,9 +35,7 @@ targets: [
 
 On iOS, add `NSLocalNetworkUsageDescription` to your app's Info.plist. iOS shows its text when it asks the user for local network access.
 
-## Usage
-
-### Serve a directory
+## Quick start
 
 ```swift
 import FTPServerKit
@@ -60,153 +58,22 @@ print("Connect to ftp://\(address):\(port)")
 server.stop()
 ```
 
-`start()` returns once clients can connect and throws `FTPServerError` when the server can't listen, for example because the port is in use. Pass port `0` to let the system pick a free port. There's also `start(completion:)` for code that doesn't use `async`.
+Use `FTPSingleFileProvider(fileURL:)` to serve a single file instead.
 
-Files added to or removed from the directory while the server runs are picked up right away. Clients can't reach anything outside the directory, also not through symbolic links. Hidden files are left out unless you pass `includesHiddenFiles: true`.
+## Documentation
 
-### Serve a single file
+The full documentation is on the [Swift Package Index](https://swiftpackageindex.com/<owner>/FTPServerKit/documentation/ftpserverkit). You can also build it in Xcode with **Product → Build Documentation**.
 
-```swift
-let file = Bundle.main.url(forResource: "file", withExtension: "bin")!
-
-let server = FTPServer(
-    configuration: FTPServerConfiguration(authentication: .anonymous),
-    fileProvider: FTPSingleFileProvider(fileURL: file)
-)
-```
-
-The file is listed alone in the root directory. Pass `fileName:` to serve it under another name. You can replace `server.fileProvider` at any time, also while the server runs.
-
-### Configuration
-
-| Option | Default | Description |
-| --- | --- | --- |
-| `port` | `2121` | Port for the control connection; `0` picks a free port |
-| `authentication` | required | `.anonymous` or `.credentials(username:password:)` |
-| `welcomeMessage` | `"FTP Server Ready"` | Text sent with the `220` greeting |
-| `maximumConnections` | `10` | Further clients get `421` and are disconnected |
-| `dataConnectionTimeout` | `5` | Seconds LIST, NLST and RETR wait for the client to open the data connection |
-| `bindsToLoopbackOnly` | `false` | Accept connections from the same device only |
-| `legacyClientOptions` | `.none` | Workarounds for older clients, see below |
-| `logHandler` | `nil` | Receives every log line |
-
-### Older and embedded clients
-
-Some FTP clients, often in embedded devices, don't follow the FTP spec. `FTPLegacyClientOptions` has workarounds for two known cases; both are off by default:
-
-```swift
-var configuration = FTPServerConfiguration(authentication: .anonymous)
-configuration.legacyClientOptions = FTPLegacyClientOptions(
-    transferCompletionDelay: 30,     // keep the data connection open 30 s after the last byte
-    keepsPassiveListenerOpen: true   // allow REST + RETR on the same passive port without a new PASV
-)
-```
-
-Only turn these on for clients that need them. With `transferCompletionDelay` above 20 seconds, clients such as FileZilla time out before the transfer completes.
-
-### Events
-
-Iterate `events` to follow what the server does. Each read returns a new stream, so several parts of your app can listen at once. A stream only gets events from the moment you create it, lasts across restarts, and finishes when the server is released:
-
-```swift
-struct ActivityView: View {
-    let server: FTPServer
-    @State private var lastCommand = ""
-
-    var body: some View {
-        Text(lastCommand)
-            .task { // cancelled when the view disappears
-                for await event in server.events {
-                    switch event {
-                    case .receivedCommand(let command, let argument, _):
-                        lastCommand = "\(command) \(argument)" // PASS arguments are masked
-                    case .stopped(let error?):
-                        print("Server stopped: \(error)")
-                    default:
-                        break
-                    }
-                }
-            }
-    }
-}
-```
-
-The events are `.started(port:)`, `.stopped(error:)`, `.receivedCommand(_:argument:connectionID:)`, `.sentResponse(_:connectionID:)` and `.failed(_:connectionID:)`. The `connectionID` is the same as in log entries, so you can tell clients apart when several are connected.
-
-#### Combine
-
-`eventPublisher` sends the same events, for code built on Combine. Subscribers only get events sent after they subscribe. Events arrive on the server's internal queue, so receive them on the main queue before updating UI:
-
-```swift
-server.eventPublisher
-    .receive(on: DispatchQueue.main)
-    .sink { [weak self] event in
-        if case .receivedCommand(let command, let argument, _) = event {
-            self?.lastCommand = "\(command) \(argument)"
-        }
-    }
-    .store(in: &cancellables)
-```
-
-#### Delegate
-
-A delegate gets the same events too. All methods are optional and called on the main actor. You can use streams, the publisher and a delegate together:
-
-```swift
-@MainActor
-final class ServerModel: ObservableObject, FTPServerDelegate {
-    @Published var lastCommand = ""
-
-    func ftpServer(_ server: FTPServer, didStartOnPort port: UInt16) {}
-    func ftpServerDidStop(_ server: FTPServer, error: (any Error)?) {}
-
-    func ftpServer(_ server: FTPServer, didReceiveCommand command: String, argument: String) {
-        lastCommand = "\(command) \(argument)" // PASS arguments are masked
-    }
-}
-
-server.delegate = model // held weakly
-```
-
-### Logging
-
-The server writes to the unified log with subsystem `FTPServerKit`. To collect the lines yourself, for example to attach a client's session to a crash report, set a log handler. It's called on the server's internal queue:
-
-```swift
-var configuration = FTPServerConfiguration(authentication: .anonymous)
-configuration.logHandler = { entry in
-    guard entry.level >= .info else { return }
-    print(entry) // [2026-10-01T12:00:00Z] [info] [1A2B3C4D] Sent 1048576 bytes
-}
-```
-
-Each `FTPLogEntry` carries a `connectionID`, so you can group the lines per client.
-
-### Custom file providers
-
-Conform to `FTPFileProvider` to serve files from anywhere. Paths are always absolute and normalized, like `/` or `/folder/file.txt`:
-
-```swift
-struct MyProvider: FTPFileProvider {
-    func itemInfo(atPath path: String) throws -> FTPFileInfo { … }
-    func contentsOfDirectory(atPath path: String) throws -> [FTPFileInfo] { … }
-    func openFile(atPath path: String, offset: UInt64) throws -> any FTPReadableFile { … }
-}
-```
-
-`FileHandle` already conforms to `FTPReadableFile`. Throw `FTPFileProviderError` to answer clients with the matching `550` reply.
-
-## Supported commands
-
-USER, PASS, PWD, CWD, CDUP, TYPE, MODE, STRU, PASV, EPSV, LIST, NLST, RETR, SIZE, MDTM, REST, ABOR, SYST, FEAT, OPTS, NOOP and QUIT.
-
-The server is read-only: uploads, deletes and renames get `550`. Active mode (PORT, EPRT) isn't supported, so clients have to use passive mode, which they do by default.
+- [Getting Started](https://swiftpackageindex.com/<owner>/FTPServerKit/documentation/ftpserverkit/gettingstarted): serving a directory or a file, configuration, and running in the background
+- [Observing the Server](https://swiftpackageindex.com/<owner>/FTPServerKit/documentation/ftpserverkit/observingtheserver): events as an `AsyncStream`, a Combine publisher or a delegate, and log lines
+- [Writing a Custom File Provider](https://swiftpackageindex.com/<owner>/FTPServerKit/documentation/ftpserverkit/customfileproviders): serving files from memory or anywhere else
+- [Supporting Older Clients](https://swiftpackageindex.com/<owner>/FTPServerKit/documentation/ftpserverkit/supportingolderclients): workarounds for embedded clients that don't follow the FTP spec
 
 ## Good to know
 
+- **Read-only.** Uploads, deletes and renames get `550`. Clients have to use passive mode, which they do by default.
 - **Plain FTP only.** There's no TLS, so usernames, passwords and files travel unencrypted. Use it on networks you trust.
 - **Background.** iOS suspends an app's network listeners soon after it goes to the background. Stop the server when your app does, and start it again when the app becomes active.
-- **Passive address.** PASV replies with the address the client connected to, so transfers work over Wi-Fi, Personal Hotspot, USB and VPN alike.
 
 ## Example app
 

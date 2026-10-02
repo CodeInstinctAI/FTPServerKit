@@ -26,12 +26,16 @@ public protocol FTPFileProvider: Sendable {
 
 /// A file or directory as listed to FTP clients.
 public struct FTPFileInfo: Sendable, Equatable {
+    /// The file or directory name, without a path.
     public var name: String
+    /// Whether the item is a directory.
     public var isDirectory: Bool
     /// Size in bytes; `0` for directories.
     public var size: UInt64
+    /// The date shown in listings and returned by MDTM.
     public var modificationDate: Date
 
+    /// Creates file information.
     public init(name: String, isDirectory: Bool, size: UInt64, modificationDate: Date) {
         self.name = name
         self.isDirectory = isDirectory
@@ -44,6 +48,7 @@ public struct FTPFileInfo: Sendable, Equatable {
 public protocol FTPReadableFile: AnyObject {
     /// Returns up to `count` bytes, or empty or `nil` data at the end of the file.
     func read(upToCount count: Int) throws -> Data?
+    /// Called once when the transfer finishes, fails or is aborted.
     func close() throws
 }
 
@@ -51,9 +56,13 @@ extension FileHandle: FTPReadableFile {}
 
 /// Errors a file provider throws; the server answers each with `550`.
 public enum FTPFileProviderError: Error, Sendable, Equatable {
+    /// Nothing exists at the path.
     case notFound
+    /// The path is a file, but the command needs a directory, such as CWD.
     case notADirectory
+    /// The path is a directory, but the command needs a file, such as RETR.
     case isADirectory
+    /// The path exists but clients may not reach it.
     case accessDenied
 }
 

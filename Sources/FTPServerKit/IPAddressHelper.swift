@@ -10,7 +10,9 @@ import Foundation
 /// Finds the device's IP addresses and network interfaces.
 public enum IPAddressHelper {
 
-    /// Get the current local IP address using getifaddrs()
+    /// The device's IPv4 address on Personal Hotspot or Wi-Fi, for showing clients where to connect.
+    ///
+    /// Prefers the Personal Hotspot address when both are active. Returns `nil` when the device has neither.
     public static func getLocalIPAddress() -> String? {
         var address: String?
         var ifaddr: UnsafeMutablePointer<ifaddrs>?
@@ -54,7 +56,7 @@ public enum IPAddressHelper {
         return address
     }
 
-    /// Detect if the device is in Personal Hotspot mode
+    /// Whether Personal Hotspot is on and has an address in its usual `172.20.10.x` range.
     public static func isPersonalHotspotActive() -> Bool {
         var ifaddr: UnsafeMutablePointer<ifaddrs>?
 
@@ -95,7 +97,7 @@ public enum IPAddressHelper {
         return false
     }
 
-    /// Get the interface name for the current connection
+    /// The name of the first interface with an IPv4 address on Wi-Fi (`en0`) or Personal Hotspot (`bridge…`).
     public static func getCurrentInterfaceName() -> String? {
         var ifaddr: UnsafeMutablePointer<ifaddrs>?
 
