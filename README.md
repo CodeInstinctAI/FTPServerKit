@@ -11,7 +11,7 @@ Use it to share files from your app with any FTP client on the local network: Fi
 - Files are streamed in chunks, so large files aren't loaded into memory
 - Username and password or anonymous login
 - `async` start that reports errors such as a port already in use
-- Server events as an `AsyncStream`, or through a delegate for existing code, plus a log handler
+- Server events as an `AsyncStream`, a Combine publisher or a delegate, so it fits any codebase, plus a log handler
 - Opt-in workarounds for older and embedded FTP clients
 - Swift 6 language mode, safe to use from any thread
 
@@ -133,9 +133,24 @@ struct ActivityView: View {
 
 The events are `.started(port:)`, `.stopped(error:)`, `.receivedCommand(_:argument:connectionID:)`, `.sentResponse(_:connectionID:)` and `.failed(_:connectionID:)`. The `connectionID` is the same as in log entries, so you can tell clients apart when several are connected.
 
+#### Combine
+
+`eventPublisher` sends the same events, for code built on Combine. Subscribers only get events sent after they subscribe. Events arrive on the server's internal queue, so receive them on the main queue before updating UI:
+
+```swift
+server.eventPublisher
+    .receive(on: DispatchQueue.main)
+    .sink { [weak self] event in
+        if case .receivedCommand(let command, let argument, _) = event {
+            self?.lastCommand = "\(command) \(argument)"
+        }
+    }
+    .store(in: &cancellables)
+```
+
 #### Delegate
 
-For existing code, a delegate gets the same events. All methods are optional and called on the main actor. You can use a delegate and streams together:
+A delegate gets the same events too. All methods are optional and called on the main actor. You can use streams, the publisher and a delegate together:
 
 ```swift
 @MainActor

@@ -5,6 +5,7 @@
 //  Created by Marc Janga on 01/10/2026.
 //
 
+import Combine
 import Foundation
 import Testing
 @testable import FTPServerKit
@@ -85,6 +86,40 @@ struct FTPServerTests {
         #expect(await delegate.events == ["started \(port)", "stopped"])
     }
 
+    @Test func eventPublisherReceivesStartAndStop() async throws {
+        let files = try TemporaryFiles()
+        let server = makeServer(provider: FTPDirectoryProvider(rootURL: files.root))
+        let received = LockedEvents()
+        let subscription = server.eventPublisher.sink { received.append($0) }
+        defer { subscription.cancel() }
+
+        let port = try await server.start()
+        // Both events are sent on the server's queue, which `stop()` waits for.
+        server.stop()
+
+        let events = received.events
+        #expect(events.count == 2)
+        guard case .started(let startedPort) = events.first, case .stopped(nil) = events.last else {
+            Issue.record("Expected .started then .stopped, got \(events)")
+            return
+        }
+        #expect(startedPort == port)
+    }
+
+    @Test func eventPublisherFinishesWhenTheServerIsReleased() async throws {
+        let files = try TemporaryFiles()
+        var server: FTPServer? = makeServer(provider: FTPDirectoryProvider(rootURL: files.root))
+        let finished = LockedEvents()
+        let subscription = try #require(server?.eventPublisher).sink(
+            receiveCompletion: { _ in finished.append(.stopped(error: nil)) },
+            receiveValue: { _ in }
+        )
+        defer { subscription.cancel() }
+        server = nil
+
+        #expect(finished.events.count == 1)
+    }
+
     @Test func eventStreamFinishesWhenTheServerIsReleased() async throws {
         let files = try TemporaryFiles()
         var server: FTPServer? = makeServer(provider: FTPDirectoryProvider(rootURL: files.root))
@@ -93,6 +128,23 @@ struct FTPServerTests {
 
         var iterator = events.makeAsyncIterator()
         #expect(await iterator.next() == nil)
+    }
+}
+
+private final class LockedEvents: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: [FTPServerEvent] = []
+
+    var events: [FTPServerEvent] {
+        lock.lock()
+        defer { lock.unlock() }
+        return storage
+    }
+
+    func append(_ event: FTPServerEvent) {
+        lock.lock()
+        defer { lock.unlock() }
+        storage.append(event)
     }
 }
 

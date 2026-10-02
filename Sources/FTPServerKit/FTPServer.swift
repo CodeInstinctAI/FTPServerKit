@@ -5,6 +5,7 @@
 //  Created by Marc Janga on 11/11/2025.
 //
 
+import Combine
 import Foundation
 import Network
 import os
@@ -33,7 +34,7 @@ public enum FTPServerError: Error, LocalizedError {
 /// PASV, EPSV, LIST, NLST, RETR, SIZE, MDTM, REST, ABOR, SYST, FEAT, OPTS, NOOP and QUIT.
 public final class FTPServer: @unchecked Sendable {
     // Unchecked: the mutable state below is only touched on `queue`, except `storedDelegate` and
-    // `eventContinuations`, which `observersLock` guards.
+    // `eventContinuations`, which `observersLock` guards. `eventSubject` is only sent to on `queue`.
 
     public let configuration: FTPServerConfiguration
 
@@ -56,6 +57,7 @@ public final class FTPServer: @unchecked Sendable {
     private let observersLock = NSLock()
     private weak var storedDelegate: (any FTPServerDelegate)?
     private var eventContinuations: [UUID: AsyncStream<FTPServerEvent>.Continuation] = [:]
+    private let eventSubject = PassthroughSubject<FTPServerEvent, Never>()
 
     // MARK: - Initialization
 
@@ -69,6 +71,7 @@ public final class FTPServer: @unchecked Sendable {
         let listener = listener
         let sessions = Array(sessions.values)
         eventContinuations.values.forEach { $0.finish() }
+        eventSubject.send(completion: .finished)
         queue.async {
             listener?.cancel()
             sessions.forEach { $0.close() }
@@ -114,6 +117,22 @@ public final class FTPServer: @unchecked Sendable {
         defer { observersLock.unlock() }
         eventContinuations[id] = continuation
         return stream
+    }
+
+    /// The server's events as a Combine publisher, for code built on Combine. Prefer ``events`` in new code.
+    ///
+    /// Subscribers only get events sent after they subscribe. The publisher lasts across restarts and
+    /// finishes when the server is deallocated. Events arrive on the server's internal queue, so
+    /// receive them on the main queue before updating UI:
+    ///
+    /// ```swift
+    /// server.eventPublisher
+    ///     .receive(on: DispatchQueue.main)
+    ///     .sink { event in … }
+    ///     .store(in: &cancellables)
+    /// ```
+    public var eventPublisher: AnyPublisher<FTPServerEvent, Never> {
+        eventSubject.eraseToAnyPublisher()
     }
 
     /// The files the server serves. Can be replaced while the server runs; the next command uses the new provider.
@@ -272,7 +291,7 @@ public final class FTPServer: @unchecked Sendable {
         configuration.logHandler?(entry)
     }
 
-    /// Sends `event` to every ``events`` stream, and to the delegate on the main actor.
+    /// Sends `event` to every ``events`` stream, to ``eventPublisher``, and to the delegate on the main actor.
     func emit(_ event: FTPServerEvent) {
         observersLock.lock()
         let delegate = storedDelegate
@@ -280,6 +299,7 @@ public final class FTPServer: @unchecked Sendable {
         observersLock.unlock()
 
         continuations.forEach { $0.yield(event) }
+        eventSubject.send(event)
         guard let delegate else { return }
         DispatchQueue.main.async {
             MainActor.assumeIsolated {

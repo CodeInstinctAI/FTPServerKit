@@ -7,7 +7,7 @@
 
 import Foundation
 
-/// Something an ``FTPServer`` did, delivered through ``FTPServer/events``.
+/// Something an ``FTPServer`` did, delivered through ``FTPServer/events`` and ``FTPServer/eventPublisher``.
 /// Each case matches an ``FTPServerDelegate`` method.
 ///
 /// Client events carry the `connectionID` of the client they belong to, the same ID as in ``FTPLogEntry``.
