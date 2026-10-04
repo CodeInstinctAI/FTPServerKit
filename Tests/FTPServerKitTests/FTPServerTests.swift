@@ -271,5 +271,82 @@ struct FTPTransferTests {
         #expect(try curl(["ftp://user:pass@127.0.0.1:\(port)/a.txt"]).output == "hello")
         #expect(Date().timeIntervalSince(started) >= 1)
     }
+
+    @Test func closesTheFileOnceWhenStoppedDuringTheCompletionDelay() async throws {
+        let files = try TemporaryFiles()
+        let provider = CloseCountingProvider(base: FTPDirectoryProvider(rootURL: files.root))
+        let server = makeServer(
+            provider: provider,
+            legacyClientOptions: FTPLegacyClientOptions(transferCompletionDelay: 5)
+        )
+        let port = try await server.start()
+
+        let download = Task.detached { try curl(["ftp://user:pass@127.0.0.1:\(port)/a.txt"]) }
+
+        // The file is closed after its last byte, then the server waits 5 s before replying 226.
+        let deadline = Date().addingTimeInterval(4)
+        while provider.closeCount == 0, Date() < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(provider.closeCount == 1)
+
+        // Closes the session while the transfer is still waiting for its delay.
+        server.stop()
+        #expect(try await download.value.status != 0) // curl never got the 226
+        #expect(provider.closeCount == 1)
+    }
 }
 #endif
+
+/// Wraps a provider and counts how often the files it opened are closed.
+private final class CloseCountingProvider: FTPFileProvider, @unchecked Sendable {
+    // Unchecked: `closes` is guarded by `lock`.
+    private let base: any FTPFileProvider
+    private let lock = NSLock()
+    private var closes = 0
+
+    init(base: any FTPFileProvider) {
+        self.base = base
+    }
+
+    var closeCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return closes
+    }
+
+    func itemInfo(atPath path: String) throws -> FTPFileInfo {
+        try base.itemInfo(atPath: path)
+    }
+
+    func contentsOfDirectory(atPath path: String) throws -> [FTPFileInfo] {
+        try base.contentsOfDirectory(atPath: path)
+    }
+
+    func openFile(atPath path: String, offset: UInt64) throws -> any FTPReadableFile {
+        CountedFile(base: try base.openFile(atPath: path, offset: offset)) { [self] in
+            lock.lock()
+            defer { lock.unlock() }
+            closes += 1
+        }
+    }
+
+    private final class CountedFile: FTPReadableFile {
+        private let base: any FTPReadableFile
+        private let onClose: () -> Void
+
+        init(base: any FTPReadableFile, onClose: @escaping () -> Void) {
+            self.base = base
+            self.onClose = onClose
+        }
+
+        func read(upToCount count: Int) throws -> Data? {
+            try base.read(upToCount: count)
+        }
+
+        func close() throws {
+            onClose()
+            try base.close()
+        }
+    }
+}

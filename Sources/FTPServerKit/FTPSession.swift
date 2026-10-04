@@ -52,13 +52,19 @@ final class FTPSession: @unchecked Sendable {
         let connection: NWConnection
         /// The passive listener the connection came from, so a newer PASV's listener isn't closed with it.
         let listener: NWListener?
-        let file: (any FTPReadableFile)?
+        private(set) var file: (any FTPReadableFile)?
         var bytesSent: UInt64 = 0
 
         init(connection: NWConnection, listener: NWListener?, file: (any FTPReadableFile)?) {
             self.connection = connection
             self.listener = listener
             self.file = file
+        }
+
+        /// Closes the file once, however many of completion, failure, ABOR and session close happen.
+        func closeFile() {
+            try? file?.close()
+            file = nil
         }
     }
 
@@ -87,7 +93,7 @@ final class FTPSession: @unchecked Sendable {
 
         if let transfer = activeTransfer {
             activeTransfer = nil
-            try? transfer.file?.close()
+            transfer.closeFile()
             transfer.connection.cancel()
         }
         dataConnectionWaiter = nil
@@ -420,7 +426,7 @@ final class FTPSession: @unchecked Sendable {
         restartOffset = 0
         if let transfer = activeTransfer {
             activeTransfer = nil
-            try? transfer.file?.close()
+            transfer.closeFile()
             release(transfer)
             reply(426, "Transfer aborted")
             reply(226, "ABOR command successful")
@@ -616,7 +622,7 @@ final class FTPSession: @unchecked Sendable {
     }
 
     private func completeFileTransfer(_ transfer: DataTransfer) {
-        try? transfer.file?.close()
+        transfer.closeFile()
         log(.info, "Sent \(transfer.bytesSent) bytes")
 
         let delay = configuration.legacyClientOptions.transferCompletionDelay
@@ -643,7 +649,7 @@ final class FTPSession: @unchecked Sendable {
     private func failTransfer(_ transfer: DataTransfer, error: any Error) {
         guard activeTransfer === transfer else { return }
         activeTransfer = nil
-        try? transfer.file?.close()
+        transfer.closeFile()
         release(transfer)
         log(.error, "Transfer failed: \(error)")
         server?.emit(.failed(error, connectionID: id))

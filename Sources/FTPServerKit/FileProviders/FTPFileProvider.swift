@@ -48,7 +48,7 @@ public struct FTPFileInfo: Sendable, Equatable {
 public protocol FTPReadableFile: AnyObject {
     /// Returns up to `count` bytes, or empty or `nil` data at the end of the file.
     func read(upToCount count: Int) throws -> Data?
-    /// Called once when the transfer finishes, fails or is aborted.
+    /// Called once when the transfer finishes, fails or is aborted, or the client disconnects.
     func close() throws
 }
 
