@@ -81,7 +81,7 @@ Pass `fileName:` to serve the file under another name. You can replace ``FTPServ
 
 Call ``FTPServer/stop()`` to disconnect every client and stop listening. You can start the server again afterwards.
 
-iOS suspends an app's network listeners soon after it goes to the background. Stop the server when your app does, and start it again when the app becomes active:
+iOS suspends an app's network listeners soon after it goes to the background. Stop the server when your app does, and start it again when the app becomes active. This example uses the iOS 17 form of `onChange`; on iOS 15 and 16, use the form whose closure takes only the new value:
 
 ```swift
 .onChange(of: scenePhase) { _, phase in
