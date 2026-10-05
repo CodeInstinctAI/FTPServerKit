@@ -12,7 +12,7 @@ Add the package in Xcode with **File → Add Package Dependencies…**, or in `P
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/<owner>/FTPServerKit.git", branch: "main"),
+    .package(url: "https://github.com/CodeInstinctAI/FTPServerKit.git", branch: "main"),
 ],
 targets: [
     .target(name: "MyApp", dependencies: ["FTPServerKit"]),

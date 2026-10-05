@@ -26,7 +26,7 @@ Add the package in Xcode with **File → Add Package Dependencies…**, or in `P
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/<owner>/FTPServerKit.git", branch: "main"),
+    .package(url: "https://github.com/CodeInstinctAI/FTPServerKit.git", branch: "main"),
 ],
 targets: [
     .target(name: "MyApp", dependencies: ["FTPServerKit"]),
@@ -62,12 +62,12 @@ Use `FTPSingleFileProvider(fileURL:)` to serve a single file instead.
 
 ## Documentation
 
-The full documentation is on the [Swift Package Index](https://swiftpackageindex.com/<owner>/FTPServerKit/documentation/ftpserverkit). You can also build it in Xcode with **Product → Build Documentation**.
+The full documentation is on the [Swift Package Index](https://swiftpackageindex.com/CodeInstinctAI/FTPServerKit/documentation/ftpserverkit). You can also build it in Xcode with **Product → Build Documentation**.
 
-- [Getting Started](https://swiftpackageindex.com/<owner>/FTPServerKit/documentation/ftpserverkit/gettingstarted): serving a directory or a file, configuration, and running in the background
-- [Observing the Server](https://swiftpackageindex.com/<owner>/FTPServerKit/documentation/ftpserverkit/observingtheserver): events as an `AsyncStream`, a Combine publisher or a delegate, and log lines
-- [Writing a Custom File Provider](https://swiftpackageindex.com/<owner>/FTPServerKit/documentation/ftpserverkit/customfileproviders): serving files from memory or anywhere else
-- [Supporting Older Clients](https://swiftpackageindex.com/<owner>/FTPServerKit/documentation/ftpserverkit/supportingolderclients): workarounds for embedded clients that don't follow the FTP spec
+- [Getting Started](https://swiftpackageindex.com/CodeInstinctAI/FTPServerKit/documentation/ftpserverkit/gettingstarted): serving a directory or a file, configuration, and running in the background
+- [Observing the Server](https://swiftpackageindex.com/CodeInstinctAI/FTPServerKit/documentation/ftpserverkit/observingtheserver): events as an `AsyncStream`, a Combine publisher or a delegate, and log lines
+- [Writing a Custom File Provider](https://swiftpackageindex.com/CodeInstinctAI/FTPServerKit/documentation/ftpserverkit/customfileproviders): serving files from memory or anywhere else
+- [Supporting Older Clients](https://swiftpackageindex.com/CodeInstinctAI/FTPServerKit/documentation/ftpserverkit/supportingolderclients): workarounds for embedded clients that don't follow the FTP spec
 
 ## Good to know
 
