@@ -79,6 +79,13 @@ The full documentation is on the [Swift Package Index](https://swiftpackageindex
 
 `Example/FTPServerKitExample.xcodeproj` is a SwiftUI app that shares files you pick with any FTP client on the network. It uses the package from this folder and isn't part of the package product, so it's never built into apps that depend on FTPServerKit.
 
+To run it on a device, create `Example/Signing.local.xcconfig` (ignored by git) with your own team and a bundle ID you own:
+
+```
+DEVELOPMENT_TEAM = ABCDE12345
+PRODUCT_BUNDLE_IDENTIFIER = com.yourcompany.FTPServerKitExample
+```
+
 ## Running the tests
 
 ```bash
